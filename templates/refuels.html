@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h1 class="h4 mb-0">Refuelling records</h1>
+  <div>
+    <a class="btn btn-sm btn-outline-success" href="{{ url_for('export_refuels_csv', **request.args) }}"><i class="bi bi-filetype-csv"></i> Export CSV</a>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('refuel_form', vehicle_id=f.vehicle_id) }}"><i class="bi bi-plus-lg"></i> Add refuel</a>
+  </div>
+</div>
+{% set endpoint = 'refuels' %}{% include '_filters.html' %}
+<div class="small mb-2 text-muted">
+  <span class="text-dark fw-semibold">Raw data</span> = what was entered (white columns).
+  <span class="calc-col px-1">Shaded columns</span> are <span class="text-dark fw-semibold">calculated fields</span> derived by the system.
+  {{ rows|length }} records.
+</div>
+<div class="card"><div class="table-responsive">
+<table class="table table-sm table-hover align-middle mb-0 small">
+  <thead><tr>
+    <th>Vehicle</th><th>Date / time</th><th class="text-end">Odometer</th><th class="text-end">Litres</th><th class="text-end">Price/L</th>
+    <th class="text-end">Paid</th><th>Tank</th>
+    <th class="text-end calc-col">Distance</th><th class="text-end calc-col">km/L</th><th class="text-end calc-col">L/100km</th>
+    <th class="text-end calc-col">{{ CURRENCY }}/km</th><th class="calc-col">Status</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    {% set v = vmap[r.vehicle_id] %}
+    <tr class="{{ 'table-danger' if r.anomaly else ('table-warning' if r.override_note else '') }}">
+      <td class="fw-semibold">{{ v.reg_no }}</td>
+      <td class="text-nowrap">{{ r.filled_at }}</td>
+      <td class="text-end">{{ r.odometer|num }}</td>
+      <td class="text-end">{{ r.litres|num(2) }}</td>
+      <td class="text-end">{{ r.price_per_litre|num(2) }}</td>
+      <td class="text-end">{{ r.receipt_total|num }}
+        {% if (r.receipt_total - r.calc_total)|abs > 5 %}<i class="bi bi-exclamation-circle text-warning" title="Calculated: {{ r.calc_total|num(2) }}"></i>{% endif %}</td>
+      <td>{{ 'Full' if r.full_tank else 'Partial' }}</td>
+      <td class="text-end calc-col">{{ r.distance|num }}</td>
+      <td class="text-end calc-col fw-semibold">{{ r.economy|num(2) }}</td>
+      <td class="text-end calc-col">{{ r.l_per_100|num(1) }}</td>
+      <td class="text-end calc-col">{{ r.cost_per_km|num(2) }}</td>
+      <td class="calc-col">
+        {% if r.anomaly %}<span class="badge text-bg-danger" title="{{ r.anomaly_reason }}">Anomaly</span>
+        {% elif r.valid %}<span class="badge text-bg-success">Valid</span>
+        {% elif 'Odometer' in r.status %}<span class="badge text-bg-danger">Excluded</span>
+        {% elif 'Partial' in r.status %}<span class="badge text-bg-info">Partial</span>
+        {% else %}<span class="badge text-bg-secondary">Baseline</span>{% endif %}
+        <span class="text-muted d-none d-xl-inline">{{ r.status }}</span>
+        {% if r.override_note %}<i class="bi bi-person-check text-warning" title="{{ r.override_note }}"></i>{% endif %}
+      </td>
+      <td class="text-nowrap text-end">
+        <a class="btn btn-sm btn-link p-0 me-1" href="{{ url_for('refuel_form', rid=r.id) }}" title="Edit / correct"><i class="bi bi-pencil"></i></a>
+        <form method="post" action="{{ url_for('refuel_delete', rid=r.id) }}" class="d-inline" onsubmit="return confirm('Delete this record?')">
+          <button class="btn btn-sm btn-link p-0 text-danger" title="Delete"><i class="bi bi-trash"></i></button></form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="13" class="text-center text-muted py-4">No records for this filter.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></div>
+<p class="small text-muted mt-2">Economy uses the full-tank-to-full-tank method: when a full fill follows an earlier full fill, km/L = km driven since that fill ÷ all litres added since it. The first record of each vehicle is only a baseline. Red rows = economy below 75% of that vehicle's usual figure. Yellow rows = a suspicious value the user confirmed.</p>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h1 class="h4 mb-0">Maintenance & other expenses</h1>
+  <div>
+    <a class="btn btn-sm btn-outline-success" href="{{ url_for('export_expenses_csv', **request.args) }}"><i class="bi bi-filetype-csv"></i> Export CSV</a>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('expense_form', vehicle_id=f.vehicle_id) }}"><i class="bi bi-plus-lg"></i> Add expense</a>
+  </div>
+</div>
+{% set endpoint = 'expenses' %}{% include '_filters.html' %}
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card"><div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr><th>Date</th><th>Vehicle</th><th>Category</th><th>Description</th><th class="text-end">Odometer</th><th class="text-end">Amount</th><th></th></tr></thead>
+      <tbody>
+      {% for e in rows %}
+        <tr>
+          <td>{{ e.date }}</td>
+          <td class="fw-semibold">{{ vmap[e.vehicle_id].reg_no }}</td>
+          <td><span class="badge text-bg-light border">{{ e.category }}</span></td>
+          <td class="small">{{ e.description or '' }}</td>
+          <td class="text-end">{{ e.odometer|num }}</td>
+          <td class="text-end">{{ e.amount|money }}</td>
+          <td class="text-nowrap text-end">
+            <a class="btn btn-sm btn-link p-0 me-1" href="{{ url_for('expense_form', eid=e.id) }}"><i class="bi bi-pencil"></i></a>
+            <form method="post" action="{{ url_for('expense_delete', eid=e.id) }}" class="d-inline" onsubmit="return confirm('Delete this expense?')">
+              <button class="btn btn-sm btn-link p-0 text-danger"><i class="bi bi-trash"></i></button></form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No expenses for this filter.</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr class="fw-semibold"><td colspan="5">Total</td><td class="text-end">{{ total|money }}</td><td></td></tr></tfoot>
+    </table>
+    </div></div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card"><div class="card-body">
+      <h2 class="h6">By category</h2>
+      <canvas id="catChart" height="220"></canvas>
+      <table class="table table-sm small mt-3 mb-0">
+        {% for c, amt in by_cat %}<tr><td>{{ c }}</td><td class="text-end">{{ amt|money }}</td></tr>{% endfor %}
+      </table>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const cats = {{ by_cat|tojson }};
+new Chart(catChart, {type:'doughnut',
+  data:{labels: cats.map(c=>c[0]), datasets:[{data: cats.map(c=>Math.round(c[1])),
+    backgroundColor:['#2563eb','#f59e0b','#16a34a','#dc2626','#7c3aed','#0d9488','#94a3b8','#db2777']}]},
+  options:{plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}}});
+</script>
+{% endblock %}

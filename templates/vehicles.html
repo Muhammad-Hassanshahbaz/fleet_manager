@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Vehicles</h1>
+  <div>
+    <div class="btn-group btn-group-sm me-2">
+      <a class="btn btn-outline-secondary {{ 'active' if show=='active' }}" href="{{ url_for('vehicles', show='active') }}">Active</a>
+      <a class="btn btn-outline-secondary {{ 'active' if show=='all' }}" href="{{ url_for('vehicles', show='all') }}">All incl. deactivated</a>
+    </div>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('vehicle_form') }}"><i class="bi bi-plus-lg"></i> Add vehicle</a>
+  </div>
+</div>
+<div class="card"><div class="table-responsive">
+<table class="table table-hover align-middle mb-0">
+  <thead><tr><th>Registration</th><th>Make / model</th><th>Type</th><th>Fuel</th><th class="text-end">Tank</th>
+    <th class="text-end">Records</th><th class="text-end">Last odometer</th><th>Next service</th><th>Notes</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for v in rows %}
+    <tr class="{{ 'text-muted' if not v.active }}">
+      <td class="fw-semibold">{{ v.reg_no }}</td>
+      <td>{{ v.make_model }}</td>
+      <td>{{ v.vehicle_type }}</td>
+      <td>{{ v.fuel_type }}</td>
+      <td class="text-end">{{ v.tank_capacity|num }} L</td>
+      <td class="text-end">{{ v.fills }}</td>
+      <td class="text-end">{{ v.last_odo|num }} km</td>
+      <td class="small">{{ (v.next_service_km|num ~ ' km') if v.next_service_km }}{{ ' / ' if v.next_service_km and v.next_service_date }}{{ v.next_service_date or '' }}</td>
+      <td class="small">{{ v.notes or '' }}</td>
+      <td>{% if v.active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Deactivated</span>{% endif %}</td>
+      <td class="text-nowrap text-end">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('dashboard', vehicle_id=v.id) }}" title="Dashboard"><i class="bi bi-graph-up"></i></a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('vehicle_form', vid=v.id) }}" title="Edit"><i class="bi bi-pencil"></i></a>
+        <form method="post" action="{{ url_for('vehicle_toggle', vid=v.id) }}" class="d-inline">
+          <button class="btn btn-sm btn-outline-{{ 'warning' if v.active else 'success' }}" title="{{ 'Deactivate' if v.active else 'Reactivate' }}">
+            <i class="bi {{ 'bi-pause-circle' if v.active else 'bi-play-circle' }}"></i></button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="11" class="text-center text-muted py-4">No vehicles yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></div>
+<p class="small text-muted mt-2">Deactivating a vehicle (e.g. sold or off the road) hides it from new refuel entry but keeps its history in reports. Records are never deleted when a vehicle is deactivated.</p>
+{% endblock %}

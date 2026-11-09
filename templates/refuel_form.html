@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h4 mb-3">{{ 'Edit / correct refuelling record' if rid else 'Record a refuel' }}</h1>
+<form method="post" class="card" style="max-width:960px"><div class="card-body row g-3">
+  {% if warnings %}
+  <div class="col-12">
+    <div class="alert alert-warning mb-0">
+      <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle"></i> Suspicious values – not saved yet</div>
+      <ul class="mb-2">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="confirm" value="1" id="confirm">
+        <label class="form-check-label" for="confirm">I have checked these values and they are correct</label>
+      </div>
+      <input name="override_reason" class="form-control form-control-sm mt-2" placeholder="Reason (required), e.g. odometer replaced at workshop / receipt includes car wash">
+    </div>
+  </div>
+  {% endif %}
+  <div class="col-md-5">
+    <label class="form-label">Vehicle *</label>
+    <select name="vehicle_id" id="vehicle" class="form-select" required>
+      <option value="">Choose…</option>
+      {% for v in vehicles if v.active or v.id == r.vehicle_id %}
+        <option value="{{ v.id }}" {{ 'selected' if r.vehicle_id == v.id }}
+          data-odo="{{ last[v.id].odo if v.id in last else '' }}" data-at="{{ last[v.id].at if v.id in last else '' }}"
+          data-tank="{{ v.tank_capacity or '' }}">{{ v.reg_no }} – {{ v.make_model }} ({{ v.fuel_type }})</option>
+      {% endfor %}
+    </select>
+    <div class="form-text" id="lastInfo"></div>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Date & time *</label>
+    <input type="datetime-local" name="filled_at" class="form-control" required value="{{ r.filled_at or '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Odometer (km) *</label>
+    <input type="number" step="1" min="0" name="odometer" id="odometer" class="form-control" required value="{{ r.odometer|int if r.odometer is not none else '' }}">
+    <div class="form-text" id="distInfo"></div>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Litres *</label>
+    <input type="number" step="0.01" min="0.01" name="litres" id="litres" class="form-control" required value="{{ r.litres if r.litres is not none else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Price per litre ({{ CURRENCY }}) *</label>
+    <input type="number" step="0.01" min="0.01" name="price_per_litre" id="price" class="form-control" required value="{{ r.price_per_litre if r.price_per_litre is not none else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Calculated total</label>
+    <input class="form-control calc-col" id="calcTotal" readonly tabindex="-1">
+    <div class="form-text">Litres × price (automatic)</div>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Receipt amount paid</label>
+    <input type="number" step="0.01" min="0" name="receipt_total" id="receipt" class="form-control" value="{{ r.receipt_total if r.receipt_total is not none else '' }}">
+    <div class="form-text" id="receiptInfo">Leave blank to use calculated total</div>
+  </div>
+  <div class="col-md-3">
+    <div class="form-check form-switch mt-md-4">
+      <input class="form-check-input" type="checkbox" name="full_tank" id="full" value="1" {{ 'checked' if r.full_tank }}>
+      <label class="form-check-label" for="full">Filled to full tank</label>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Driver</label>
+    <input name="driver" class="form-control" value="{{ r.driver or '' }}">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Station</label>
+    <input name="station" class="form-control" value="{{ r.station or '' }}">
+  </div>
+  <div class="col-12">
+    <label class="form-label">Notes</label>
+    <input name="notes" class="form-control" value="{{ r.notes or '' }}">
+  </div>
+  {% if r.override_note %}<div class="col-12 small text-warning-emphasis"><i class="bi bi-person-check"></i> {{ r.override_note }}</div>{% endif %}
+  <div class="col-12">
+    <button class="btn btn-primary"><i class="bi bi-save"></i> Save</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('refuels') }}">Cancel</a>
+  </div>
+</div></form>
+{% endblock %}
+{% block scripts %}
+<script>
+const $ = id => document.getElementById(id);
+function update() {
+  const l = parseFloat($('litres').value), p = parseFloat($('price').value);
+  const calc = (l > 0 && p > 0) ? l * p : null;
+  $('calcTotal').value = calc ? '{{ CURRENCY }} ' + calc.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '';
+  const rc = parseFloat($('receipt').value);
+  const info = $('receiptInfo');
+  if (calc && rc > 0) {
+    const diff = rc - calc;
+    info.innerHTML = Math.abs(diff) > Math.max(5, calc * 0.02)
+      ? `<span class="text-danger">Differs from calculated by {{ CURRENCY }} ${diff.toFixed(2)}</span>`
+      : '<span class="text-success">Matches calculated total ✓</span>';
+  } else info.textContent = 'Leave blank to use calculated total';
+
+  const opt = $('vehicle').selectedOptions[0];
+  const lastOdo = opt ? parseFloat(opt.dataset.odo) : NaN;
+  $('lastInfo').textContent = opt && opt.dataset.at ? `Latest record: ${Number(lastOdo).toLocaleString()} km on ${opt.dataset.at}` : (opt && opt.value ? 'No previous record – this will be the baseline (no economy yet).' : '');
+  const odo = parseFloat($('odometer').value);
+  const di = $('distInfo');
+  if (!isNaN(lastOdo) && !isNaN(odo)) {
+    const d = odo - lastOdo;
+    di.innerHTML = d > 0 ? `+${d.toLocaleString()} km since latest` : `<span class="text-danger">Lower than latest reading!</span>`;
+  } else di.textContent = '';
+}
+['litres','price','receipt','odometer','vehicle'].forEach(id => $(id).addEventListener('input', update));
+update();
+</script>
+{% endblock %}

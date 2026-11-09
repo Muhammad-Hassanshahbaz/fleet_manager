@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2 no-print">
+  <h1 class="h4 mb-0">Reports & export</h1>
+</div>
+{% set endpoint = 'reports' %}{% include '_filters.html' %}
+
+<div class="row g-3 mb-4 no-print">
+  <div class="col-md-4"><div class="card h-100"><div class="card-body">
+    <h2 class="h6"><i class="bi bi-file-earmark-excel text-success"></i> Excel workbook</h2>
+    <p class="small text-muted">Summary, per-vehicle comparison, monthly trend (with charts), refuels with calculated fields, expenses and vehicles.</p>
+    <a class="btn btn-success btn-sm" href="{{ url_for('export_xlsx', **request.args) }}">Download .xlsx</a>
+  </div></div></div>
+  <div class="col-md-4"><div class="card h-100"><div class="card-body">
+    <h2 class="h6"><i class="bi bi-filetype-csv text-primary"></i> CSV files</h2>
+    <p class="small text-muted">Plain data for any spreadsheet or analysis tool.</p>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('export_refuels_csv', **request.args) }}">Refuels CSV</a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('export_expenses_csv', **request.args) }}">Expenses CSV</a>
+  </div></div></div>
+  <div class="col-md-4"><div class="card h-100"><div class="card-body">
+    <h2 class="h6"><i class="bi bi-printer"></i> Printable / PDF report</h2>
+    <p class="small text-muted">The report below. Use Print → Save as PDF.</p>
+    <button class="btn btn-outline-dark btn-sm" onclick="window.print()">Print / save PDF</button>
+  </div></div></div>
+</div>
+
+<div class="card report"><div class="card-body">
+  <h2 class="h5 mb-0">Fleet Fuel & Expense Report</h2>
+  <div class="small text-muted mb-3">Generated {{ generated }} ·
+    Vehicle: {% if f.vehicle_id %}{% for v in vehicles if v.id == f.vehicle_id %}{{ v.reg_no }}{% endfor %}{% else %}All{% endif %} ·
+    Period: {{ f.start or 'first record' }} to {{ f.end or 'latest record' }}</div>
+
+  <table class="table table-sm w-auto">
+    <tr><th>Total km served</th><td class="text-end">{{ d.total_km|num }} km</td></tr>
+    <tr><th>Total fuel consumed</th><td class="text-end">{{ d.total_litres|num(1) }} L</td></tr>
+    <tr><th>Total fuel expenditure</th><td class="text-end">{{ d.total_fuel_cost|money }}</td></tr>
+    <tr><th>Overall cost per km</th><td class="text-end">{{ CURRENCY }} {{ d.overall_cost_per_km|num(2) }}</td></tr>
+    <tr><th>Fleet average economy</th><td class="text-end">{{ d.overall_economy|num(2) }} km/L</td></tr>
+    <tr><th>Other expenses</th><td class="text-end">{{ d.total_maint|money }}</td></tr>
+    <tr><th>Most economical vehicle</th><td class="text-end">{{ d.most_economical.reg_no if d.most_economical else '-' }}</td></tr>
+    <tr><th>Least economical vehicle</th><td class="text-end">{{ d.least_economical.reg_no if d.least_economical else '-' }}</td></tr>
+    <tr><th>Highest total fuel consumer</th><td class="text-end">{{ d.highest_consumer.reg_no if d.highest_consumer else '-' }}</td></tr>
+  </table>
+
+  <h3 class="h6 mt-3">Per vehicle</h3>
+  <table class="table table-sm small">
+    <thead><tr><th>Vehicle</th><th class="text-end">km</th><th class="text-end">Litres</th><th class="text-end">Fuel cost</th><th class="text-end">km/L</th><th class="text-end">Cost/km</th><th class="text-end">Other exp.</th><th class="text-end">Total</th></tr></thead>
+    {% for p in d.per_vehicle %}
+    <tr><td>{{ p.reg_no }} <span class="text-muted">{{ p.make_model }}</span></td><td class="text-end">{{ p.km|num }}</td><td class="text-end">{{ p.litres|num(1) }}</td>
+      <td class="text-end">{{ p.fuel_cost|money }}</td><td class="text-end">{{ p.economy|num(2) }}</td><td class="text-end">{{ p.cost_per_km|num(2) }}</td>
+      <td class="text-end">{{ p.maint_cost|money }}</td><td class="text-end">{{ p.total_cost|money }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3 class="h6 mt-3">Monthly trend</h3>
+  <table class="table table-sm small w-auto">
+    <thead><tr><th>Month</th><th class="text-end">Fuel cost</th><th class="text-end">Litres</th><th class="text-end">Other exp.</th><th class="text-end">km/L</th></tr></thead>
+    {% for i in range(d.trend.labels|length) %}
+    <tr><td>{{ d.trend.labels[i] }}</td><td class="text-end">{{ d.trend.fuel_cost[i]|money }}</td><td class="text-end">{{ d.trend.litres[i]|num(1) }}</td>
+      <td class="text-end">{{ d.trend.maint[i]|money }}</td><td class="text-end">{{ d.trend.economy[i]|num(2) }}</td></tr>
+    {% endfor %}
+  </table>
+
+  {% if d.anomalies %}
+  <h3 class="h6 mt-3">Anomalies to investigate</h3>
+  <ul class="small">{% for a in d.anomalies %}<li>{{ a.reg_no }} – {{ a.filled_at }}: {{ a.anomaly_reason }}</li>{% endfor %}</ul>
+  {% endif %}
+</div></div>
+{% endblock %}

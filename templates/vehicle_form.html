@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h4 mb-3">{{ 'Edit vehicle ' ~ v.reg_no if vid else 'Add vehicle' }}</h1>
+<form method="post" class="card"><div class="card-body row g-3" style="max-width:900px">
+  <div class="col-md-4">
+    <label class="form-label">Registration / vehicle ID *</label>
+    <input name="reg_no" class="form-control text-uppercase" required value="{{ v.reg_no or '' }}" placeholder="e.g. LEA-1234">
+  </div>
+  <div class="col-md-8">
+    <label class="form-label">Make / model *</label>
+    <input name="make_model" class="form-control" required value="{{ v.make_model or '' }}" placeholder="e.g. Toyota Corolla 1.6">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Vehicle type *</label>
+    <select name="vehicle_type" class="form-select" required>
+      <option value="">Choose…</option>
+      {% for t in types %}<option {{ 'selected' if v.vehicle_type==t }}>{{ t }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Fuel type *</label>
+    <select name="fuel_type" class="form-select" required>
+      <option value="">Choose…</option>
+      {% for t in fuels %}<option {{ 'selected' if v.fuel_type==t }}>{{ t }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Tank capacity (L)</label>
+    <input name="tank_capacity" type="number" step="0.1" min="1" class="form-control" value="{{ v.tank_capacity or '' }}">
+    <div class="form-text">Used to flag fills larger than the tank.</div>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Next service at (km)</label>
+    <input name="next_service_km" type="number" step="1" class="form-control" value="{{ v.next_service_km|int if v.next_service_km else '' }}">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Next service date</label>
+    <input name="next_service_date" type="date" class="form-control" value="{{ v.next_service_date or '' }}">
+  </div>
+  <div class="col-12">
+    <label class="form-label">Notes (optional)</label>
+    <textarea name="notes" rows="2" class="form-control">{{ v.notes or '' }}</textarea>
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary"><i class="bi bi-save"></i> Save</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('vehicles') }}">Cancel</a>
+  </div>
+</div></form>
+{% endblock %}

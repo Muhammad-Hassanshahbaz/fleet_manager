@@ -1,0 +1,31 @@
+{# Shared date + vehicle filter bar. Needs: vehicles, f, endpoint #}
+<form class="row g-2 align-items-end filter-bar mb-3 no-print" method="get" action="{{ url_for(endpoint) }}">
+  <div class="col-sm-4 col-md-3">
+    <label class="form-label small mb-0">Vehicle</label>
+    <select name="vehicle_id" class="form-select form-select-sm">
+      <option value="">All vehicles</option>
+      {% for v in vehicles %}
+        <option value="{{ v.id }}" {{ 'selected' if f.vehicle_id == v.id }}>{{ v.reg_no }} – {{ v.make_model }}{{ ' (inactive)' if not v.active }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-sm-3 col-md-2">
+    <label class="form-label small mb-0">From</label>
+    <input type="date" name="start" value="{{ f.start or '' }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-6 col-sm-3 col-md-2">
+    <label class="form-label small mb-0">To</label>
+    <input type="date" name="end" value="{{ f.end or '' }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Apply</button>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for(endpoint) }}">Reset</a>
+  </div>
+  <div class="col-auto ms-md-auto small">
+    Quick:
+    {% set qs = request.args.get('vehicle_id', '') %}
+    <a href="{{ url_for(endpoint, vehicle_id=qs, start='2026-10-01', end='2026-10-31') }}">Oct 2026</a> ·
+    <a href="{{ url_for(endpoint, vehicle_id=qs, start='2026-08-01', end=today) }}">Last 3 months</a> ·
+    <a href="{{ url_for(endpoint, vehicle_id=qs, start='2026-01-01', end=today) }}">This year</a>
+  </div>
+</form>

@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h1 class="h4 mb-0">Fleet dashboard</h1>
+  <a class="btn btn-sm btn-outline-success no-print" href="{{ url_for('export_xlsx', **request.args) }}"><i class="bi bi-file-earmark-excel"></i> Export this view</a>
+</div>
+{% set endpoint = 'dashboard' %}{% include '_filters.html' %}
+
+{% if not d.fills %}
+  <div class="alert alert-secondary">No refuelling records match this filter.</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  {% set kpis = [
+    ('Total km served', d.total_km|num ~ ' km', 'bi-signpost-2', 'Sum of distance between consecutive odometer readings'),
+    ('Fuel consumed', d.total_litres|num(1) ~ ' L', 'bi-droplet-half', 'Sum of litres filled'),
+    ('Fuel expenditure', d.total_fuel_cost|money, 'bi-cash-stack', 'Sum of receipt amounts paid'),
+    ('Overall cost / km', (CURRENCY ~ ' ' ~ d.overall_cost_per_km|num(2)) if d.overall_cost_per_km else '-', 'bi-currency-exchange', 'Fuel cost ÷ km, valid full-to-full intervals only'),
+    ('Fleet average', (d.overall_economy|num(2) ~ ' km/L') if d.overall_economy else '-', 'bi-speedometer', 'Total valid km ÷ total valid litres (weighted average)'),
+    ('Other expenses', d.total_maint|money, 'bi-tools', 'Maintenance, repairs, tyres, insurance, tolls…'),
+  ] %}
+  {% for label, value, icon, tip in kpis %}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card kpi h-100" title="{{ tip }}">
+      <div class="card-body">
+        <div class="kpi-label"><i class="bi {{ icon }}"></i> {{ label }}</div>
+        <div class="kpi-value">{{ value }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  {% set hl = [
+    ('Most economical', d.most_economical, 'success', 'bi-trophy', 'economy'),
+    ('Least economical', d.least_economical, 'danger', 'bi-exclamation-triangle', 'economy'),
+    ('Highest fuel consumer', d.highest_consumer, 'warning', 'bi-fire', 'litres'),
+  ] %}
+  {% for label, p, color, icon, metric in hl %}
+  <div class="col-md-4">
+    <div class="card border-{{ color }} h-100 highlight">
+      <div class="card-body d-flex align-items-center gap-3">
+        <i class="bi {{ icon }} fs-2 text-{{ color }}"></i>
+        <div>
+          <div class="small text-muted">{{ label }}</div>
+          {% if p %}
+            <div class="fw-semibold">{{ p.reg_no }} <span class="text-muted fw-normal">· {{ p.make_model }}</span></div>
+            <div class="small">
+              {% if metric == 'economy' %}{{ p.economy|num(2) }} km/L · {{ CURRENCY }} {{ p.cost_per_km|num(2) }}/km
+              {% else %}{{ p.litres|num(1) }} L · {{ p.fuel_cost|money }}{% endif %}
+            </div>
+          {% else %}<div>-</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-body">
+      <h2 class="h6">Monthly fuel cost trend</h2>
+      <canvas id="trendChart" height="130"></canvas>
+    </div></div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card h-100"><div class="card-body">
+      <h2 class="h6">Fuel economy by vehicle (km/L)</h2>
+      <canvas id="econChart" height="170"></canvas>
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h2 class="h6">Cost per km by vehicle ({{ CURRENCY }})</h2>
+      <canvas id="cpkChart" height="150"></canvas>
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h2 class="h6">Total spend by vehicle (fuel + other expenses)</h2>
+      <canvas id="spendChart" height="150"></canvas>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h2 class="h6"><i class="bi bi-bell"></i> Maintenance reminders</h2>
+      {% for r in reminders %}
+        <div class="small py-1 border-bottom"><span class="badge text-bg-{{ 'danger' if r.overdue else 'warning' }}">{{ 'Overdue' if r.overdue else 'Due soon' }}</span>
+          <a href="{{ url_for('vehicle_form', vid=r.id) }}">{{ r.reg_no }}</a> – service {{ r.message }}</div>
+      {% else %}<div class="small text-muted">No services due in the next 14 days / 500 km.</div>{% endfor %}
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h2 class="h6"><i class="bi bi-shield-exclamation"></i> Fuel anomalies (possible theft / leak / wrong entry)</h2>
+      {% for a in d.anomalies %}
+        <div class="small py-1 border-bottom"><span class="badge text-bg-danger">Check</span>
+          <a href="{{ url_for('refuels', vehicle_id=a.vehicle_id) }}">{{ a.reg_no }}</a> on {{ a.filled_at[:10] }}: {{ a.anomaly_reason }}</div>
+      {% else %}<div class="small text-muted">No intervals below {{ 75 }}% of each vehicle's normal economy.</div>{% endfor %}
+    </div></div>
+  </div>
+</div>
+
+<div class="card"><div class="card-body">
+  <h2 class="h6">Vehicle comparison</h2>
+  <div class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0">
+    <thead><tr><th>Vehicle</th><th>Fuel</th><th class="text-end">Fills</th><th class="text-end">km</th><th class="text-end">Litres</th>
+      <th class="text-end">Fuel cost</th><th class="text-end">km/L</th><th class="text-end">Cost/km</th><th class="text-end">Other exp.</th><th class="text-end">Total cost</th></tr></thead>
+    <tbody>
+    {% for p in d.per_vehicle %}
+      <tr>
+        <td><a href="{{ url_for('dashboard', vehicle_id=p.id, start=f.start, end=f.end) }}">{{ p.reg_no }}</a>
+          <span class="text-muted small">{{ p.make_model }}</span>{% if not p.active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}</td>
+        <td>{{ p.fuel_type }}</td>
+        <td class="text-end">{{ p.fills }}</td>
+        <td class="text-end">{{ p.km|num }}</td>
+        <td class="text-end">{{ p.litres|num(1) }}</td>
+        <td class="text-end">{{ p.fuel_cost|money }}</td>
+        <td class="text-end">{{ p.economy|num(2) }}</td>
+        <td class="text-end">{{ p.cost_per_km|num(2) }}</td>
+        <td class="text-end">{{ p.maint_cost|money }}</td>
+        <td class="text-end fw-semibold">{{ p.total_cost|money }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr class="fw-semibold"><td colspan="3">Fleet total</td><td class="text-end">{{ d.total_km|num }}</td>
+      <td class="text-end">{{ d.total_litres|num(1) }}</td><td class="text-end">{{ d.total_fuel_cost|money }}</td>
+      <td class="text-end">{{ d.overall_economy|num(2) }}</td><td class="text-end">{{ d.overall_cost_per_km|num(2) }}</td>
+      <td class="text-end">{{ d.total_maint|money }}</td><td class="text-end">{{ (d.total_fuel_cost + d.total_maint)|money }}</td></tr></tfoot>
+  </table>
+  </div>
+  <p class="small text-muted mt-2 mb-0">km/L and cost/km use only valid full-tank-to-full-tank intervals. A vehicle's first record is a baseline and never produces an economy figure. See <a href="{{ url_for('method') }}">Method</a>.</p>
+</div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const trend = {{ d.trend|tojson }};
+const per = {{ d.per_vehicle|tojson }};
+const C = {blue:'#2563eb', orange:'#f59e0b', green:'#16a34a', red:'#dc2626', grey:'#94a3b8', teal:'#0d9488'};
+const money = v => '{{ CURRENCY }} ' + Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
+const monthLabel = m => new Date(m + '-01').toLocaleString('en', {month:'short', year:'2-digit'});
+
+new Chart(trendChart, {
+  data: { labels: trend.labels.map(monthLabel), datasets: [
+    {type:'line', label:'Fuel cost', data: trend.fuel_cost, borderColor:C.blue, backgroundColor:C.blue, tension:.3, yAxisID:'y'},
+    {type:'bar', label:'Other expenses', data: trend.maint, backgroundColor:'rgba(148,163,184,.55)', yAxisID:'y'},
+    {type:'line', label:'Fleet km/L', data: trend.economy, borderColor:C.green, backgroundColor:C.green, borderDash:[5,4], tension:.3, yAxisID:'y1'},
+  ]},
+  options: {interaction:{mode:'index', intersect:false},
+    plugins:{tooltip:{callbacks:{label:c => c.dataset.yAxisID==='y1' ? `${c.dataset.label}: ${c.raw} km/L` : `${c.dataset.label}: ${money(c.raw)}`}}},
+    scales:{y:{beginAtZero:true, ticks:{callback:money}}, y1:{position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'km/L'}}}}
+});
+
+const withEcon = per.filter(p => p.economy).sort((a,b) => b.economy - a.economy);
+const best = withEcon.length ? withEcon[0].reg_no : null, worst = withEcon.length ? withEcon[withEcon.length-1].reg_no : null;
+new Chart(econChart, {type:'bar',
+  data:{labels: withEcon.map(p=>p.reg_no), datasets:[{label:'km/L', data: withEcon.map(p=>+p.economy.toFixed(2)),
+    backgroundColor: withEcon.map(p => p.reg_no===best ? C.green : p.reg_no===worst ? C.red : C.blue)}]},
+  options:{indexAxis:'y', plugins:{legend:{display:false}}}
+});
+
+const withCpk = per.filter(p => p.cost_per_km).sort((a,b) => a.cost_per_km - b.cost_per_km);
+new Chart(cpkChart, {type:'bar',
+  data:{labels: withCpk.map(p=>p.reg_no), datasets:[{label:'{{ CURRENCY }}/km', data: withCpk.map(p=>+p.cost_per_km.toFixed(2)), backgroundColor:C.orange}]},
+  options:{plugins:{legend:{display:false}}}
+});
+
+new Chart(spendChart, {type:'bar',
+  data:{labels: per.map(p=>p.reg_no), datasets:[
+    {label:'Fuel', data: per.map(p=>Math.round(p.fuel_cost)), backgroundColor:C.blue},
+    {label:'Other expenses', data: per.map(p=>Math.round(p.maint_cost)), backgroundColor:C.grey}]},
+  options:{scales:{x:{stacked:true}, y:{stacked:true, ticks:{callback:money}}},
+    plugins:{tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${money(c.raw)}`}}}}
+});
+</script>
+{% endblock %}

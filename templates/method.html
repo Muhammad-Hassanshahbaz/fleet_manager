@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block content %}
+<div style="max-width:900px">
+<h1 class="h4">Method & concepts</h1>
+<p class="text-muted">How the system turns raw refuelling records into information.</p>
+
+<div class="card mb-3"><div class="card-body">
+<h2 class="h6">1. Fuel economy: full-tank-to-full-tank method</h2>
+<ol class="small mb-2">
+  <li>All records of a vehicle are sorted by date/time.</li>
+  <li>A <b>full-tank</b> fill is a <i>baseline</i>: we know the tank is full at that odometer reading.</li>
+  <li>At the next full-tank fill, the fuel burned since the baseline equals <b>all litres added after the baseline, including any partial top-ups</b>.</li>
+  <li><code>km/L = (odometer now − odometer at baseline) ÷ litres added since baseline</code><br>
+      <code>L/100 km = 100 ÷ km/L</code><br>
+      <code>cost per km = money paid since baseline ÷ km since baseline</code></li>
+  <li>The <b>first record</b> of a vehicle has no previous odometer reading, so it is only a baseline and <b>never shows an economy figure</b>.</li>
+  <li>Partial fills show distance travelled, but their economy is counted at the next full tank.</li>
+  <li>A record with an odometer problem (lower or equal reading, confirmed by the user) is <b>excluded</b> and starts a fresh baseline, so one bad reading cannot distort results.</li>
+</ol>
+<div class="small bg-light p-2 rounded"><b>Example:</b> Full fill at 10,000 km → partial 15 L at 10,250 km → full 22 L at 10,480 km.
+Economy = (10,480 − 10,000) ÷ (15 + 22) = 480 ÷ 37 = <b>12.97 km/L</b>.</div>
+</div></div>
+
+<div class="card mb-3"><div class="card-body">
+<h2 class="h6">2. Data validation</h2>
+<table class="table table-sm small mb-0">
+  <tr><th>Rejected outright (impossible)</th><td>Missing or non-numeric values; zero or negative litres, price or amount; future date; adding records to a deactivated vehicle.</td></tr>
+  <tr><th>Held until the user confirms (suspicious)</th><td>Odometer lower than or equal to the previous reading · odometer higher than a later record (back-dated entry) · distance longer than ~30 km per litre of tank capacity · litres more than tank capacity · price outside {{ CURRENCY }} {{ price_range[0] }}–{{ price_range[1] }}/L · receipt amount differs from litres × price by more than 2% (min {{ CURRENCY }} 5).</td></tr>
+  <tr><th>Audit trail</th><td>When the user confirms, the warning and their reason are saved with the record (yellow rows).</td></tr>
+</table>
+</div></div>
+
+<div class="card mb-3"><div class="card-body">
+<h2 class="h6">3. Dashboard definitions</h2>
+<ul class="small mb-0">
+  <li><b>Total km served</b>: sum of distance between consecutive odometer readings (records dated in the filter period).</li>
+  <li><b>Total fuel consumed / expenditure</b>: sum of litres / receipt amounts in the period.</li>
+  <li><b>Overall cost/km</b> and <b>fleet km/L</b>: computed from valid full-to-full intervals only, as <i>total ÷ total</i> (a weighted average), not as an average of averages.</li>
+  <li><b>Most / least economical</b>: highest / lowest km/L among vehicles with at least one valid interval.</li>
+  <li><b>Highest fuel consumer</b>: most litres in the period. This is a <i>total</i>, so a large truck can be the highest consumer and still be efficient for its size.</li>
+  <li><b>Anomaly</b>: an interval below {{ (threshold*100)|int }}% of the vehicle's median km/L (needs at least 4 intervals). Possible fuel theft, a leak, a mechanical fault or a wrong entry.</li>
+  <li>History is always calculated on all records, then filtered by date, so an interval that starts before the filter period is still correct.</li>
+</ul>
+</div></div>
+
+<div class="card mb-3"><div class="card-body">
+<h2 class="h6">4. Concepts</h2>
+<dl class="small mb-0">
+  <dt>Raw data vs information</dt><dd>Raw data is what was entered: odometer, litres, price. Information is what a manager can act on, e.g. "the LES-3021 truck costs more than twice as much per km as ISB-7788".</dd>
+  <dt>Calculated fields</dt><dd>Total cost, distance, km/L, L/100km and cost/km are worked out from raw fields and not stored, so they always match the data (shaded columns on the Refuelling page).</dd>
+  <dt>Database records</dt><dd>Three related tables: <code>vehicles</code>, <code>refuels</code> and <code>expenses</code>, linked by <code>vehicle_id</code> (one vehicle has many refuels and expenses).</dd>
+  <dt>Time-series trend</dt><dd>Values grouped by month and plotted in order, showing whether costs are rising, seasonal or affected by price changes.</dd>
+  <dt>Data validation</dt><dd>Checks at entry time that stop impossible or suspicious records from corrupting the results (section 2).</dd>
+  <dt>Aggregation</dt><dd>Combining many records into one number: SUM of litres, COUNT of fills, GROUP BY vehicle or month.</dd>
+  <dt>Average vs total</dt><dd>A total measures scale (who uses the most fuel). An average measures efficiency (who uses fuel best). Fleet km/L is a weighted average (total km ÷ total litres), so long-distance vehicles count more.</dd>
+  <dt>Manager decisions</dt><dd>Move routes to efficient vehicles, service or replace the least economical ones, investigate anomalies, budget from the monthly trend, compare cost/km before buying a new vehicle, and schedule services from the reminders.</dd>
+</dl>
+</div></div>
+</div>
+{% endblock %}
